@@ -598,34 +598,42 @@ TIMELINE_HTML = """
 """
 
 async def take_screenshot(config: dict, device_type: str = 'desktop'):
-    """
-    Take screenshot with configuration dictionary containing:
-    {
-        'url': str,  # The URL of the website to capture
-        'name': str,  # The name of the website (used for naming the screenshot file)
-        'button_selector': str,  # The CSS selector for the consent button
-        'frame_selector': str (optional),  # The CSS selector for the iframe containing the consent button (if any)
-        'output_dir': str (optional)  # The directory where the screenshot will be saved (default is current directory)
-    }
-    device_type: 'desktop' or 'mobile'
-    """
     async with browser_semaphore:
         async with async_playwright() as p:
             try:
-                # Device configurations
+                # Device configurations with more CI-friendly settings
                 devices = {
                     'desktop': {
                         'viewport': {'width': 1920, 'height': 1080},
-                        'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        'user_agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        'device_scale_factor': 1,
                     },
                     'mobile': {
-                        **p.devices['iPhone 13'],  # Use Playwright's predefined device
+                        **p.devices['iPhone 13'],
+                        'device_scale_factor': 1,
                     }
                 }
                 
-                browser = await p.chromium.launch()
-                context = await browser.new_context(**devices[device_type])
+                # Launch browser with additional arguments for CI environment
+                browser = await p.chromium.launch(
+                    args=[
+                        '--disable-dev-shm-usage',  # Handles limited memory in CI
+                        '--no-sandbox',  # Required for running in containers
+                        '--font-render-hinting=none',  # Helps with font consistency
+                        '--disable-gpu',  # Better stability in CI
+                    ]
+                )
+                
+                context = await browser.new_context(
+                    **devices[device_type],
+                    bypass_csp=True,  # Helps with loading fonts
+                    locale='de-AT'  # Ensure consistent locale
+                )
+                
                 page = await context.new_page()
+                
+                # Set longer timeouts for CI environment
+                page.set_default_timeout(30000)
                 
                 output_dir = config.get('output_dir', '.')
                 output_path = f"{output_dir}/{config['name']}_{device_type}.jpeg"
@@ -633,48 +641,54 @@ async def take_screenshot(config: dict, device_type: str = 'desktop'):
                 try:
                     await page.goto(
                         config['url'],
-                        wait_until='domcontentloaded',
-                        timeout=20000
+                        wait_until='networkidle',  # Wait for network to be idle
+                        timeout=30000
                     )
-                    await page.wait_for_timeout(2000)
-
-                    # Try to handle consent and popups, but don't let failures prevent screenshot
+                    
+                    # Wait longer in CI environment
+                    await page.wait_for_timeout(5000)
+                    
+                    # Handle consent screens and popups
                     try:
-                        # Simulate mouse movement to trigger consent
-                        await page.mouse.move(100, 100)
-                        await page.mouse.move(200, 200)
-                        await page.mouse.move(150, 150)
-                        await page.wait_for_timeout(1000)
-                        
-                        # Try to click consent button
                         if config.get('frame_selector'):
                             frame = page.frame_locator(config['frame_selector'])
-                            await frame.locator(config['button_selector']).click(timeout=2000)
+                            await frame.locator(config['button_selector']).click(timeout=5000)
                             logger.info(f"Clicked consent button in frame for {config['name']}")
                         else:
-                            await page.locator(config['button_selector']).click(timeout=2000)
+                            await page.locator(config['button_selector']).click(timeout=5000)
                             logger.info(f"Clicked consent button for {config['name']}")
-                            
-                        # Try to close popup if specified
-                        if config.get('popup_selector'):
-                            await page.wait_for_timeout(2000)
-                            if config.get('popup_frame_selector'):
-                                frame = page.frame_locator(config['popup_frame_selector'])
-                                await frame.locator(config['popup_selector']).click(timeout=2000)
-                            else:
-                                await page.locator(config['popup_selector']).click(timeout=2000)
+                        
+                        # Wait longer for consent screen to disappear
+                        await page.wait_for_timeout(2000)
+                        
+                        # Additional check for consent screen visibility
+                        try:
+                            is_visible = await page.locator(config['button_selector']).is_visible()
+                            if is_visible:
+                                logger.warning(f"Consent button still visible for {config['name']} after clicking")
+                                # Try clicking again
+                                await page.locator(config['button_selector']).click(timeout=2000)
+                        except Exception:
+                            pass
                             
                     except Exception as e:
-                        logger.warning(f"Non-critical error for {config['name']}: {str(e)}")
+                        logger.warning(f"Consent handling error for {config['name']}: {str(e)}")
                     
-                    # Always take the screenshot, regardless of any previous errors
-                    await page.wait_for_timeout(5000)
-                    await page.screenshot(path=output_path, type='jpeg', quality=35)
+                    # Wait for any animations to complete
+                    await page.wait_for_timeout(3000)
+                    
+                    # Take screenshot with adjusted quality settings
+                    await page.screenshot(
+                        path=output_path,
+                        type='jpeg',
+                        quality=50,  # Slightly higher quality
+                        full_page=False
+                    )
+                    
                     logger.info(f"Screenshot captured for {config['name']} ({device_type})")
                     
                 except Exception as e:
                     logger.error(f"Error processing {config['name']} ({device_type}): {str(e)}")
-                    # Take screenshot anyway, even if there were errors
                     try:
                         await page.screenshot(path=output_path, type='jpeg', quality=35)
                         logger.info(f"Fallback screenshot captured for {config['name']} ({device_type})")
