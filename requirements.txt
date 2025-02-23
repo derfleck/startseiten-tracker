@@ -1,0 +1,5 @@
+colorama
+jinja2
+playwright
+pytz
+aiohttp>=3.8.0
