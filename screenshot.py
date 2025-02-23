@@ -296,6 +296,27 @@ TIMELINE_HTML = """
         .site-title a:hover {
             color: #0d6efd;
         }
+        
+        .error-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #721c24;
+            background-color: #f8d7da;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+        
+        .device-view {
+            position: relative;
+        }
     </style>
 </head>
 <body>
@@ -412,7 +433,17 @@ TIMELINE_HTML = """
             return `${day}.${month}.${year} ${hour}:${minute}`;
         }
         
-        // Update all screenshots with loading state
+        // Add new function to check if image exists
+        async function imageExists(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+                img.src = url;
+            });
+        }
+        
+        // Modified updateScreenshots function
         async function updateScreenshots(timestamp) {
             if (isTransitioning) return;
             isTransitioning = true;
@@ -422,20 +453,30 @@ TIMELINE_HTML = """
             
             const device = document.querySelector('.device-toggle button.active').dataset.device;
             
-            // Create promises for all image loads
-            const loadPromises = Array.from(images).map(img => {
-                return new Promise((resolve) => {
-                    const newImg = new Image();
-                    newImg.onload = () => {
-                        img.src = newImg.src;
-                        img.classList.remove('loading');
-                        resolve();
-                    };
-                    newImg.src = `archive/${timestamp}/${img.dataset.site}_${device}.jpeg`;
-                });
-            });
+            for (const img of images) {
+                const newSrc = `archive/${timestamp}/${img.dataset.site}_${device}.jpeg`;
+                const exists = await imageExists(newSrc);
+                
+                const deviceView = img.closest('.device-view');
+                const existingError = deviceView.querySelector('.error-overlay');
+                if (existingError) {
+                    existingError.remove();
+                }
+                
+                if (exists) {
+                    img.src = newSrc;
+                } else {
+                    // Keep previous image if it exists, otherwise show error
+                    if (!img.src || img.src.endsWith('undefined')) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'error-overlay';
+                        errorDiv.textContent = 'Screenshot nicht verfügbar';
+                        deviceView.appendChild(errorDiv);
+                    }
+                }
+                img.classList.remove('loading');
+            }
             
-            await Promise.all(loadPromises);
             document.getElementById('currentTimestamp').textContent = formatTimestamp(timestamp);
             isTransitioning = false;
         }
@@ -727,28 +768,31 @@ async def take_screenshot(config: dict, device_type: str = 'desktop'):
             finally:
                 await browser.close()
 
+# Modify take_timestamped_screenshots to handle errors
 async def take_timestamped_screenshots(sites):
-    """
-    Take timestamped screenshots for a list of sites.
-
-    Args:
-        sites (list): A list of dictionaries, each containing the configuration for a site.
-    """
-    # Create timestamp-based directory
+    """Take timestamped screenshots for a list of sites."""
     tz = timezone('Europe/Vienna')
     timestamp = datetime.now(tz).strftime('%Y%m%d_%H%M')
     screenshots_dir = f'archive/{timestamp}'
     os.makedirs(screenshots_dir, exist_ok=True)
     
-    # Take screenshots
+    async def safe_screenshot(site, device):
+        try:
+            site.update({'output_dir': screenshots_dir})
+            await take_screenshot(site, device)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to capture {device} screenshot for {site['name']}: {str(e)}")
+            return False
+    
     tasks = []
     for site in sites:
         for device in ['desktop', 'mobile']:
-            screenshot_path = f"{screenshots_dir}/{site['name']}_{device}.jpeg"
-            site.update({'output_dir': screenshots_dir})
-            tasks.append(take_screenshot(site, device))
+            tasks.append(safe_screenshot(site, device))
     
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    logger.info(f"Completed screenshot batch: {sum(1 for r in results if r)} successful, {sum(1 for r in results if not r)} failed")
+    
     return timestamp
 
 def cleanup_old_screenshots():
@@ -778,7 +822,7 @@ def generate_timeline_report(sites):
         generated_at=datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S %Z')
     )
     
-    with open('timeline_report.html', 'w') as f:
+    with open('index.html', 'w') as f:
         f.write(html_content)
 
 async def fetch_sites_config():
