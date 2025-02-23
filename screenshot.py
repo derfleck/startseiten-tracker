@@ -609,7 +609,7 @@ async def take_screenshot(config: dict, device_type: str = 'desktop'):
     }
     device_type: 'desktop' or 'mobile'
     """
-    async with browser_semaphore:  # Add semaphore control here
+    async with browser_semaphore:
         async with async_playwright() as p:
             try:
                 # Device configurations
@@ -630,10 +630,6 @@ async def take_screenshot(config: dict, device_type: str = 'desktop'):
                 output_dir = config.get('output_dir', '.')
                 output_path = f"{output_dir}/{config['name']}_{device_type}.jpeg"
                 
-                # Wait for page load
-                # await page.goto(config['url'], wait_until='networkidle')
-                # await page.wait_for_load_state('domcontentloaded')
-                
                 try:
                     await page.goto(
                         config['url'],
@@ -642,129 +638,49 @@ async def take_screenshot(config: dict, device_type: str = 'desktop'):
                     )
                     await page.wait_for_timeout(2000)
 
-                    # Simulate mouse movement to trigger consent
-                    logger.info(f"Simulating mouse movement for {config['name']}")
-                    await page.mouse.move(100, 100)
-                    await page.mouse.move(200, 200)
-                    await page.mouse.move(150, 150)
-                    await page.wait_for_timeout(1000)  # Wait for potential triggers
-                    
-                    async def debug_button_search(page, attempt):
-                        debug_dir = "debug"
-                        os.makedirs(debug_dir, exist_okay=True)
+                    # Try to handle consent and popups, but don't let failures prevent screenshot
+                    try:
+                        # Simulate mouse movement to trigger consent
+                        await page.mouse.move(100, 100)
+                        await page.mouse.move(200, 200)
+                        await page.mouse.move(150, 150)
+                        await page.wait_for_timeout(1000)
                         
-                        screenshot_path = f"{debug_dir}/{config['name']}_{device_type}_attempt_{attempt}.png"
-                        await page.screenshot(path=screenshot_path)
-                        logger.info(f"Debug screenshot saved to: {screenshot_path}")
-                        
-                        buttons = await page.evaluate('''
-                            () => {
-                                function getAllButtons(root) {
-                                    let buttons = [];
-                                    buttons.push(...Array.from(root.querySelectorAll('button')));
-                                    
-                                    const elements = root.querySelectorAll('*');
-                                    elements.forEach(el => {
-                                        if (el.shadowRoot) {
-                                            buttons.push(...getAllButtons(el.shadowRoot));
-                                        }
-                                    });
-                                    return buttons;
-                                }
-                                
-                                let allButtons = getAllButtons(document);
-                                return allButtons.map(button => ({
-                                    text: button.innerText.trim(),
-                                    html: button.outerHTML,
-                                    visible: button.offsetParent !== null,
-                                    classes: button.className,
-                                    id: button.id,
-                                    path: button.nodeName + (button.id ? '#' + button.id : '') + 
-                                          (button.className ? '.' + button.className.replace(/\\s+/g, '.') : '')
-                                }));
-                            }
-                        ''')
-                        
-                        if not buttons:
-                            logger.error(f"No buttons found on page for {config['name']} ({device_type})")
+                        # Try to click consent button
+                        if config.get('frame_selector'):
+                            frame = page.frame_locator(config['frame_selector'])
+                            await frame.locator(config['button_selector']).click(timeout=2000)
+                            logger.info(f"Clicked consent button in frame for {config['name']}")
                         else:
-                            logger.info(f"Found {len(buttons)} buttons on {config['name']} ({device_type}):")
-                            for btn in buttons:
-                                if btn['visible']:
-                                    logger.info(f"  Visible button: {btn['path']} - Text: '{btn['text']}'")
-                                else:
-                                    logger.debug(f"  Hidden button: {btn['path']} - Text: '{btn['text']}'")
-
-                        frames = await page.evaluate('''
-                            () => Array.from(document.querySelectorAll('iframe')).map(f => ({
-                                id: f.id || 'unnamed',
-                                name: f.name || 'unnamed',
-                                src: f.src,
-                                visible: f.offsetParent !== null
-                            }))
-                        ''')
-                        
-                        if not frames:
-                            logger.warning(f"No iframes found on page for {config['name']}")
-                        else:
-                            logger.info(f"Found {len(frames)} iframes:")
-                            for frame in frames:
-                                status = "visible" if frame['visible'] else "hidden"
-                                logger.info(f"  {status} frame: {frame['id']} ({frame['src']})")
-
-                    async def try_click_consent():
-                        try:
-                            if config.get('frame_selector'):
-                                frame = page.frame_locator(config['frame_selector'])
-                                print(f"Frame found: {frame}")                                
-                                await frame.locator(config['button_selector']).click(timeout=2000)
-                                logger.info(f"Successfully clicked consent button in frame for {config['name']}")
-                            else:
-                                await page.locator(config['button_selector']).click(timeout=2000)
-                                logger.info(f"Successfully clicked consent button for {config['name']}")
-                            return True
-                        except Exception as e:
-                            if i == max_retries - 1:
-                                logger.error(f"Failed to find consent button for {config['name']} ({device_type})")
-                                logger.error(f"Selector '{config['button_selector']}' not found")
-                                if config.get('frame_selector'):
-                                    logger.error(f"Frame '{config['frame_selector']}' might be missing")
-                                await debug_button_search(page, i)
-                            return False
-                    
-                    # Retry mechanism
-                    max_retries = 5
-                    consent_success = False
-                    for i in range(max_retries):
-                        if await try_click_consent():
-                            logger.info(f"Successfully clicked consent for {config['name']} ({device_type}) on try {i+1}")
-                            consent_success = True
-                            break
-                        logger.warning(f"Attempt {i+1} failed for {config['name']} ({device_type}), waiting...")
-                        await page.wait_for_timeout(2000)
-                    
-                    # After consent, try to close popup if selector is specified
-                    if consent_success and config.get('popup_selector'):
-                        try:
+                            await page.locator(config['button_selector']).click(timeout=2000)
+                            logger.info(f"Clicked consent button for {config['name']}")
+                            
+                        # Try to close popup if specified
+                        if config.get('popup_selector'):
+                            await page.wait_for_timeout(2000)
                             if config.get('popup_frame_selector'):
                                 frame = page.frame_locator(config['popup_frame_selector'])
-                                await page.wait_for_timeout(2000)
                                 await frame.locator(config['popup_selector']).click(timeout=2000)
-                                logger.info(f"Successfully closed popup using selector '{config['popup_selector']}' in frame for {config['name']}")
                             else:
-                                await page.wait_for_timeout(2000)  # Wait for any post-consent animations
                                 await page.locator(config['popup_selector']).click(timeout=2000)
-                                logger.info(f"Successfully closed popup using selector '{config['popup_selector']}' for {config['name']}")
-                        except Exception as e:
-                            logger.warning(f"Could not find or click popup element '{config['popup_selector']}' for {config['name']}: {str(e)}")
+                            
+                    except Exception as e:
+                        logger.warning(f"Non-critical error for {config['name']}: {str(e)}")
                     
-                    # Take full page screenshot
+                    # Always take the screenshot, regardless of any previous errors
                     await page.wait_for_timeout(5000)
                     await page.screenshot(path=output_path, type='jpeg', quality=35)
-                except asyncio.TimeoutError:
-                    print(f"Timeout error capturing screenshot for {config['name']} ({device_type})")
+                    logger.info(f"Screenshot captured for {config['name']} ({device_type})")
+                    
                 except Exception as e:
-                    print(f"Error capturing screenshot for {config['name']} ({device_type}): {str(e)}")
+                    logger.error(f"Error processing {config['name']} ({device_type}): {str(e)}")
+                    # Take screenshot anyway, even if there were errors
+                    try:
+                        await page.screenshot(path=output_path, type='jpeg', quality=35)
+                        logger.info(f"Fallback screenshot captured for {config['name']} ({device_type})")
+                    except Exception as screenshot_error:
+                        logger.error(f"Failed to capture fallback screenshot for {config['name']}: {str(screenshot_error)}")
+                        
             finally:
                 await browser.close()
 
