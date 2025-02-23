@@ -1,0 +1,121 @@
+{
+	"gist_id": "b3ca24b23d093495464d95cb641641d6",
+    "sites": [
+        {
+            "url": "https://kurier.at",
+            "name": "KURIER",
+            "button_selector": "button#didomi-notice-agree-button",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://derstandard.at",
+            "name": "Der Standard",
+            "button_selector": "button.sp_choice_type_11",
+            "frame_selector": "#sp_message_iframe_1030279",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://krone.at",
+            "name": "Krone",
+            "button_selector": "button#didomi-notice-agree-button",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://heute.at",
+            "name": "Heute",
+            "button_selector": "button.sp_choice_type_11",
+            "frame_selector": "#sp_message_iframe_1238313",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://diepresse.com",
+            "name": "Die Presse",
+            "button_selector": "button#didomi-notice-agree-button",
+            "popup_selector": "button.sticky__close-button",
+            "popup_frame_selector": "#offer_539ab1bc19dfcfb9723c-0",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://oe24.at",
+            "name": "OE24",
+            "button_selector": "button.sp_choice_type_11",
+            "frame_selector": "#sp_message_iframe_1221612",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://orf.at",
+            "name": "ORF",
+            "button_selector": "button#didomi-notice-agree-button",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://kleinezeitung.at",
+            "name": "Kleine Zeitung",
+            "button_selector": "button#didomi-notice-agree-button",
+            "popup_selector": "span#offer__close_btn",
+            "popup_frame_selector": "#offer_0a05358553d214dcc2df-0",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://nachrichten.at",
+            "name": "OÖN",
+            "button_selector": "button#onetrust-accept-btn-handler",
+            "popup_selector": "a#videoOverlay__close",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://vol.at",
+            "name": "Vorarlberg Online",
+            "button_selector": "a.cmptxt_btn_yes",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://noen.at",
+            "name": "NÖN",
+            "button_selector": "button#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://meinbezirk.at",
+            "name": "Mein Bezirk",
+            "button_selector": "button#onetrust-accept-btn-handler",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://tt.com",
+            "name": "Tiroler Tageszeitung",
+            "button_selector": "button#onetrust-accept-btn-handler",
+            "popup_selector": "button.pn-widget__close",
+            "popup_frame_selector": "#offer_e96b3d1984f5db64b4bc-0",
+            "output_dir": "screenshots"
+        },
+        {
+            "url": "https://www.bvz.at",
+            "name": "BVZ",
+            "button_selector": "button#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+            "output_dir": "screenshots"
+        },
+		{
+			"url": "https://spiegel.de",
+			"name": "Spiegel",
+			"button_selector": "button.sp_choice_type_11",
+			"frame_selector": "#sp_message_iframe_1181842",
+			"popup_selector": "#spPlusBanner > div > div > div > button",
+			"output_dir": "screenshots"
+		},
+		{
+			"url": "https://sueddeutsche.de",
+			"name": "Süddeutsche",
+			"button_selector": "button.sp_choice_type_11",
+			"frame_selector": "#sp_message_iframe_1220813",
+			"output_dir": "screenshots"
+		},
+		{
+			"url": "https://bild.de",
+			"name": "Bild",
+			"button_selector": "button.sp_choice_type_11",
+			"frame_selector": "#sp_message_iframe_1263321",
+			"output_dir": "screenshots"
+		}
+    ]
+}
