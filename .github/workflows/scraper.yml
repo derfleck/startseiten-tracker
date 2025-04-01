@@ -1,7 +1,5 @@
 name: Screenshot Pipeline
 on:
-  schedule:
-    - cron: '*/15 5-23 * * *'
   workflow_dispatch:
 
 jobs:
